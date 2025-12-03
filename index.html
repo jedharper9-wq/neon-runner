@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Untitled</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RUN — NEON ROBOT BUILD (V. 4.4 - Minified)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  /* Minified CSS */
+  body{background:#000;margin:0;font-family:Consolas,'Courier New',monospace;color:#0FF}
+  #container{max-width:900px;margin:14px auto;text-align:center}
+  canvas{display:block;margin:0 auto;background:transparent} 
+  #score{text-align:center;margin-top:8px;font-size:1.4em;text-shadow: 0 0 5px #0FF, 0 0 10px #0FF}
+  .modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#000011;border:2px solid #0FF;padding:18px;border-radius:8px;z-index:50;color:#0FF;box-shadow: 0 0 10px #0FF}
+  .hidden{display:none}
+  input[type=text]{padding:8px;width:240px;font-size:16px;background:#000;color:#0FF;border:1px solid #0FF;box-shadow: 0 0 5px #0FF}
+  button{padding:8px 12px;margin-left:8px;cursor:pointer;background:#0FF;color:#000;border:none;border-radius:4px;font-weight:bold;transition: background 0.1s}
+  button:hover{background:#0e5e5}
+  #mobileControls button{width:120px;height:60px;font-size:18px;border-radius:8px;box-shadow: 0 0 8px #0FF;background:#088;color:#FFF;font-weight:bold;opacity:.85;touch-action:manipulation}
+  #devPanel{width:90vw;max-width:1100px;height:70vh;overflow:auto;background:#000;border:2px solid #0FF;padding:12px;box-shadow: 0 0 10px #0FF}
+  table{width:100%;border-collapse:collapse;color:#0FF}
+  th,td{padding:6px;border-bottom:1px solid #055;text-align:left}
+  th.sortable{cursor:pointer}
+  .tri{margin-left:6px;font-size:12px}
+  #debugOverlay{display:none}
+</style>
+</head>
+<body>
+<div id="container">
+  <canvas id="gameCanvas" width="900" height="650"></canvas>
+  <div id="score">Score: 0</div>
+</div>
+
+<div id="mobileModal" class="modal hidden">
+  <div>ACCESS QUESTION: Are you currently running this simulation on a mobile device?</div>
+  <div style="margin-top:12px">
+    <button id="mobileYesBtn" style="background:#0F0; color:#000;">YES (Show Touch Controls)</button>
+    <button id="mobileNoBtn" style="background:#F36; color:#000;">NO (Desktop/Keyboard)</button>
+  </div>
+</div>
+
+<div id="nameModal" class="modal hidden">
+  <div>ACCESS REQUIRED: Input User ID for Score Upload</div>
+  <div style="margin-top:8px">
+    <input id="nameInput" maxlength="24" placeholder="CYBORG-UNIT-01" />
+    <button id="nameSaveBtn">ACCEPT</button>
+    <button id="nameSkipBtn" style="background:#333; color:#fff">SKIP</button>
+  </div>
+</div>
+
+<div id="devModal" class="modal hidden" style="width:92vw;max-width:1100px;height:80vh;overflow:auto">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3>DEV PANEL - ACCESS GRANTED</h3>
+    <div>Search: <input id="devSearch" type="text" disabled style="width: 120px;" placeholder="(Disabled)" /> <button id="devClose">CLOSE</button></div>
+  </div>
+  <div id="devPanel"></div>
+</div>
+
+<div id="mobileControls" class="hidden" style="position:fixed; bottom:0; width:100%; text-align:center; padding:10px; background:rgba(0,0,0,0.5); z-index:10; display:flex; justify-content:space-between; align-items:center; box-sizing:border-box;">
+    <button id="mobileDuckBtn" style="margin-left: 20px;">DUCK ↓</button>
+    <button id="mobileJumpBtn" style="margin-right: 20px;">JUMP ↑</button>
+</div>
+
+<div id="debugOverlay" role="status" aria-hidden="true"></div>
+
+<script type="module">
+// --- MINIFIED NEON ROBOT BUILD (V. 4.4 - Fixed and Filtered) ---
+
+// Firebase imports (Essential for Leaderboard)
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+import { getDatabase, ref, push, get, query, orderByChild, limitToLast, remove, set } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js';
+
+var firebaseConfig = {
+  apiKey: 'AIzaSyC6TuY-ECNjWKo6GzWhmKUCiXOQA6uNRV8',
+  authDomain: 'run-24658.firebaseapp.com',
+  databaseURL: 'https://run-24658-default-rtdb.firebaseio.com/',
+  projectId: 'run-24658',
+  storageBucket: 'run-24658.appspot.com',
+  messagingSenderId: '647924554438',
+  appId: '1:647924554438:web:b9d2cd501e494cddb555c7'
+};
+
+var appFB = null;
+var db = null;
+try{
+  appFB = initializeApp(firebaseConfig);
+  db = getDatabase(appFB);
+}catch(e){console.error('FB init fail:', e && e.message)}
+
+// Shortened Globals
+var c = document.getElementById('gameCanvas'); // canvas
+var G = 480; // ground
+var x = c.getContext('2d'); // ctx
+var ScEl = document.getElementById('score'); // scoreEl
+
+// Polyfill roundRect
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    if(typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+    this.beginPath(); this.moveTo(x + r.tl, y);
+    this.lineTo(x + w - r.tr, y); x.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+    this.lineTo(x + w, y + h - r.br); x.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+    this.lineTo(x + r.bl, y + h); x.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+    this.lineTo(x, y + r.tl); x.quadraticCurveTo(x, y, x + r.tl, y); this.closePath();
+  };
+}
+
+// Global Constants
+const NR = '#FF3366'; // NEON_RED
+const NSB = 8; // NEON_SHADOW_BLUR
+const GC = '#003333'; // GRID_COLOR
+const PC = {
+    'BLUE': '#00FFFF', 'RED': '#FF0000', 'GREEN': '#00FF00', 'YELLOW': '#FFFF00', 
+    'PURPLE': '#FF00FF', 'WHITE': '#FFFFFF'
+}; // PLAYER_COLORS
+const PD = ['CUBE', 'BLADE', 'COOL', 'TANK', 'NINJA']; // PLAYER_DESIGNS
+const BW = ['fuck','shit','cunt','piss','dick','cock','ass','bitch','tits','slut']; // BANNED_WORDS
+
+// Shop Data (Unchanged)
+const SHOP_ITEMS = [
+    { id: 'RED', type: 'color', cost: 100, label: 'RED CHROME' }, { id: 'GREEN', type: 'color', cost: 150, label: 'GREEN PLASMA' },
+    { id: 'YELLOW', type: 'color', cost: 200, label: 'GOLD ALLOY' }, { id: 'PURPLE', type: 'color', cost: 250, label: 'VOXEL VIOLET' },
+    { id: 'WHITE', type: 'color', cost: 300, label: 'TITANIUM WHITE' }, { id: 'BLADE', type: 'design', cost: 350, label: 'Razor Runner' },
+    { id: 'COOL', type: 'design', cost: 500, label: 'Cyber-Aegis' }, { id: 'TANK', type: 'design', cost: 750, label: 'Goliath Tanker' },
+    { id: 'NINJA', type: 'design', cost: 1000, label: 'Phantom-9' }
+];
+const SHOP_VISUAL_TIERS = [
+    { title: 'TIER 1: BASIC DRONE-BLOCK (CUBE) - Free Design', design: 'CUBE', colors: Object.keys(PC), name: 'Basic Drone-Block' },
+    { title: 'TIER 2: RAZOR RUNNER (BLADE) - 350c', design: 'BLADE', colors: Object.keys(PC), name: 'Razor Runner' },
+    { title: 'TIER 3: CYBER-AEGIS (COOL) - 500c', design: 'COOL', colors: Object.keys(PC), name: 'Cyber-Aegis' },
+    { title: 'TIER 4: GOLIATH TANKER (TANK) - 750c', design: 'TANK', colors: Object.keys(PC), name: 'Goliath Tanker' },
+    { title: 'TIER 5: PHANTOM-9 (NINJA) - 1000c', design: 'NINJA', colors: Object.keys(PC), name: 'Phantom-9' }
+];
+
+// Local Storage Shorthands
+function lC(){ return Number(localStorage.getItem('run_coins') || 0); }
+function sLC(v){ localStorage.setItem('run_coins', String(v)); }
+function lCol(){ return localStorage.getItem('run_color') || 'BLUE'; }
+function sLCol(c){ localStorage.setItem('run_color', c); }
+function lDes(){ return localStorage.getItem('run_design') || 'CUBE'; } 
+function sLDes(d){ localStorage.setItem('run_design', d); }
+function lUnl(){ return JSON.parse(localStorage.getItem('run_unlocked') || '{"BLUE": true, "CUBE": true}'); } 
+function sLUnl(u){ localStorage.setItem('run_unlocked', JSON.stringify(u)); }
+function lN(){ return localStorage.getItem('run_name') || ''; }
+function sLN(n){ localStorage.setItem('run_name', n); }
+function lH(){ return Number(localStorage.getItem('run_high') || 0); }
+function sLH(v){ localStorage.setItem('run_high', String(v)); }
+
+// Player State Shorthand
+var P = {
+    x: 50, y: G - 60, width: 30, height: 60, dy: 0, jumpPower: 16, gravity: 0.7,
+    onGround: true, isDucking: false, originalHeight: 60, duckHeight: 30, 
+    color: lCol(), design: lDes()
+}; // player
+
+var coins = lC();
+var obs = []; // obstacles
+var stars = Array.from({ length: 35 }, function(){ return { x: Math.random() * c.width, y: Math.random() * (G - 40), a: Math.random() }; });
+var S = 7, ACC = 0.0012, MAX_SPEED = 16; // speed
+var Sc = 0, E = false, M = true, sT = Date.now(), gOF = 0, sG = false, sS = false; // score, isGameOver, inMenu, startTime, gameOverFade, showingGlobal, showingShop
+var btnStart = {}, btnHS = {}, btnRetry = {}, btnMenu = {}, btnBack = {}, btnShop = {};
+var isMob = JSON.parse(localStorage.getItem('run_is_mobile') || 'false'); // isMobileDevice
+var dV = 'menu'; // devView 
+var eSK = null; // editingScoreKey
+var iI = false; // isInvincible
+var pC = lCol(); // previewColor
+var pD = lDes(); // previewDesign
+var kBuff = ''; // keyBuffer
+var gSC = null, gSL = false, gSE = false, gLS = 0; // globalScoresCache, globalScoresLoading, globalScoresError, globalLoadStart
+
+// Firebase DB Access (Minified)
+function uS(n, s){ try{ if(!db)throw 0; push(ref(db, 'scores'), { name: n || 'Player', score: s, ts: Date.now() });}catch(e){console.error('US fail', e && e.message)} }
+async function fAS(){ try{ if(!db)throw 0; var q=query(ref(db, 'scores'),orderByChild('ts'),limitToLast(1000)); var snap=await get(q); var arr=[]; snap.forEach(c=>{arr.push(Object.assign({key:c.key},c.val()))}); return arr;}catch(e){console.error('FAS fail', e && e.message); return [];} }
+async function dS(k){ try{ if(!db)throw 0; await remove(ref(db, 'scores/'+k));}catch(e){console.error('DS fail', e && e.message)} }
+async function uSFB(k, nN, nS){ try{ if(!db)throw 0; await set(ref(db, 'scores/'+k), { name: nN.slice(0, 24), score: nS, ts: Date.now() });}catch(e){console.error('USFB fail', e && e.message)} }
+
+// --- NAME SAFETY CHECK (NEW) ---
+function cNS(n) {
+    const lN = n.toLowerCase();
+    for (let i = 0; i < BW.length; i++) {
+        if (lN.includes(BW[i])) return false;
+    }
+    return true;
+}
+// --- END NAME SAFETY CHECK ---
+
+// Input Handlers
+document.addEventListener('keydown', function(e){
+  try{
+    kBuff += (e.key || '').toLowerCase(); 
+    if(kBuff.length > 40) kBuff = kBuff.slice(-40);
+    if(kBuff.endsWith('jch')) document.getElementById('debugOverlay').style.display = (document.getElementById('debugOverlay').style.display === 'none' || document.getElementById('debugOverlay').style.display === '') ? 'block' : 'none';
+    if(kBuff.endsWith('jedediah')){ document.getElementById('devModal').classList.remove('hidden'); dV = 'menu'; rDP(); }
+    if(kBuff.endsWith('$$$')){ coins+=500; sLC(coins); }
+
+    if(M && !sS && !sG){ if(e.code === 'Space' || e.code === 'Enter') startGame(); return; }
+    
+    if(!E && !M){
+        if((e.code === 'ArrowUp' || e.code === 'Space') && P.onGround){
+            P.dy = -P.jumpPower; P.onGround = false; P.isDucking = false; P.height = P.originalHeight;
+        }
+        if(e.code === 'ArrowDown' && P.onGround && !P.isDucking){
+            P.isDucking = true; P.y += (P.originalHeight - P.duckHeight); P.height = P.duckHeight;
+        }
+    }
+  }catch(err){}
+});
+
+document.addEventListener('keyup', function(e){
+    try{
+        if(!E && e.code === 'ArrowDown' && P.isDucking){
+            P.isDucking = false; P.y -= (P.originalHeight - P.duckHeight); P.height = P.originalHeight;
+        }
+    }catch(err){}
+});
+
+// Shop Logic & Click Handler
+var sBC = {}; // shopButtonCoords
+
+function hSC(mx, my){
+    if(btnBack && mx > btnBack.x && mx < btnBack.x + btnBack.w && my > btnBack.y && my < btnBack.y + btnBack.h){ sS = false; pC = lCol(); pD = lDes(); return; }
+    
+    for(const id in sBC){
+        const c = sBC[id];
+        if(mx > c.x && mx < c.x + c.w && my > c.y && my < c.y + c.h){
+            const cK = c.color;
+            const aD = c.actionDesign; 
+            pC = cK; pD = aD;
+            const unl = lUnl();
+            const cUnl = unl[cK];
+            const dUnl = unl[aD]; 
+            const cI = SHOP_ITEMS.find(it => it.id === cK) || { cost: 0 };
+            const dI = SHOP_ITEMS.find(it => it.id === aD) || { cost: 0 };
+            let tC = 0;
+            let nP = false;
+
+            if (aD !== 'CUBE' && !dUnl) { tC += dI.cost; nP = true; }
+            if (cK !== 'BLUE' && !cUnl) { tC += cI.cost; nP = true; }
+            
+            if (nP) {
+                if (coins >= tC) {
+                    coins -= tC; sLC(coins);
+                    if (aD !== 'CUBE' && !dUnl) { unl[aD] = true; }
+                    if (cK !== 'BLUE' && !cUnl) { unl[cK] = true; }
+                    sLUnl(unl);
+                } else {
+                    dSop(); alert(`ACCESS DENIED: Insufficient coins. Required: ${tC}c to unlock.`); return;
+                }
+            }
+            
+            const cDU = unl[aD];
+            const cCU = unl[cK];
+
+            if(cDU && cCU){
+                P.color = cK; sLCol(cK);
+                P.design = aD; sLDes(aD);
+                pC = P.color; pD = P.design;
+            }
+            dSop(); return;
+        }
+    }
+}
+
+c.addEventListener('click', function(e){
+  try{
+    var r = c.getBoundingClientRect(); var mx = e.clientX - r.left, my = e.clientY - r.top;
+    
+    if(M){
+        if(sG){
+            if(btnBack && mx > btnBack.x && mx < btnBack.x + btnBack.w && my > btnBack.y && my < btnBack.y + btnBack.h){ sG = false; gSC = null; gSL = false; gSE = false; return; } return;
+        }
+        if(sS){ hSC(mx, my); return; }
+        if(btnStart && mx > btnStart.x && mx < btnStart.x + btnStart.w && my > btnStart.y && my < btnStart.y + btnStart.h){ startGame(); return; } 
+        if(btnHS && mx > btnHS.x && mx < btnHS.x + btnHS.w && my > btnHS.y && my < btnHS.y + btnHS.h){ sG = true; gSE = false; gSL = false; gSC = null; gLS = 0; return; } 
+        if(btnShop && mx > btnShop.x && mx < btnShop.x + btnShop.w && my > btnShop.y && my < btnShop.y + btnShop.h){ sS = true; pC = P.color; pD = P.design; return; } return; 
+    }
+    
+    if(E){ if(btnRetry && mx > btnRetry.x && mx < btnRetry.x + btnRetry.w && my > btnRetry.y && my < btnRetry.y + btnRetry.h){ restartGame(); return; } if(btnMenu && mx > btnMenu.x && mx < btnMenu.x + btnMenu.w && my > btnMenu.y && my < btnMenu.y + btnMenu.h){ M = true; sG = false; sS = false; return; } return; }
+  }catch(err){}
+});
+
+// --- DRAWING FUNCTIONS ---
+
+function aNG(color){ x.shadowColor = color; x.shadowBlur = NSB; } // applyNeonGlow
+function rNG(){ x.shadowBlur = 0; } // removeNeonGlow
+
+// Draw Player (Minified but functionally identical to V 4.4 fixed version)
+function dSP(ctx, X, Y, W, H, C, D, isD = false, Scl = 1.0, jS = 'ground'){
+    var bW = W * Scl;
+    var bH = H * Scl;
+    var dX = X - bW/2;
+    var dY = Y - bH;
+    const L = PC.WHITE;
+    const VDH = 25 * Scl;
+    const GLY = bH;
+
+    ctx.save();
+    ctx.translate(dX, dY);
+
+    if (jS !== 'ground') {
+        const RC = C;
+        const FS = 0.5 + Math.sin(Date.now() / 80) * 0.1; 
+        
+        if (jS === 'ascend') {
+            ctx.save();
+            ctx.translate(bW/2, GLY);
+            aNG(RC);
+            ctx.fillStyle = RC;
+            ctx.beginPath();
+            ctx.moveTo(-10 * Scl * FS, 0); ctx.lineTo(10 * Scl * FS, 0); ctx.lineTo(0, 15 * Scl); ctx.fill();
+            ctx.fillStyle = L;
+            ctx.beginPath();
+            ctx.moveTo(-5 * Scl * FS, 0); ctx.lineTo(5 * Scl * FS, 0); ctx.lineTo(0, 8 * Scl); ctx.fill();
+            ctx.restore();
+            rNG();
+        } else if (jS === 'descend') {
+            aNG(RC);
+            ctx.fillStyle = RC;
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(bW/2 - 10 * Scl, GLY - 5 * Scl, 20 * Scl, 10 * Scl);
+            ctx.globalAlpha = 1.0;
+            rNG();
+        }
+    }
+    
+    aNG(C);
+    ctx.fillStyle = C;
+
+    if (D === 'CUBE') {
+        let cW = isD ? 40 * Scl : 30 * Scl;
+        let cH = isD ? VDH : 40 * Scl; 
+        let cY = GLY - cH;
+        ctx.beginPath();
+        ctx.roundRect((bW - cW)/2, cY, cW, cH, 5 * Scl);
+        ctx.fill();
+        ctx.fillStyle = L;
+        if (isD) { ctx.fillRect((bW - 10 * Scl)/2, cY + cH - 3 * Scl, 10 * Scl, 3 * Scl); } else { ctx.fillRect(bW/2 - 2 * Scl, cY - 8 * Scl, 4 * Scl, 8 * Scl); }
+    } else if (D === 'BLADE') {
+        let bWd = 30 * Scl;
+        let bHd = isD ? VDH : 45 * Scl; 
+        let bYd = GLY - bHd;
+        ctx.beginPath();
+        ctx.moveTo((bW - bWd)/2, bYd);
+        ctx.lineTo((bW - bWd)/2 + bWd, bYd + 10 * Scl);
+        ctx.lineTo((bW - bWd)/2 + bWd, bYd + bHd);
+        ctx.lineTo((bW - bWd)/2, bYd + bHd);
+        ctx.closePath();
+        ctx.fill();
+        if (!isD) {
+            ctx.fillStyle = L;
+            ctx.fillRect((bW - 20 * Scl)/2 - 5 * Scl, GLY - 5 * Scl, 30 * Scl, 5 * Scl);
+        } else {
+            ctx.fillStyle = C;
+            ctx.beginPath();
+            ctx.roundRect((bW - bWd)/2 - 5*Scl, GLY - 10*Scl, bWd+10*Scl, 10*Scl, 5*Scl);
+            ctx.fill();
+        }
+    } else if (D === 'COOL') {
+        if (isD) {
+            let bHd = VDH; 
+            let bWd = (W + 10) * Scl;
+            let bYd = GLY - bHd;
+            ctx.beginPath();
+            ctx.roundRect((bW - bWd)/2, bYd, bWd, bHd, 4 * Scl);
+            ctx.fill();
+            ctx.fillStyle = L;
+            ctx.fillRect((bW - 10 * Scl)/2, bYd + 2 * Scl, 10 * Scl, 5 * Scl);
+        } else {
+            let bHd = 35 * Scl, bWd = (W - 10) * Scl, hH = 10 * Scl, lH = 15 * Scl;
+            ctx.fillStyle = L;
+            ctx.fillRect((bW - 10 * Scl)/2, 0, 10 * Scl, hH);
+            ctx.fillStyle = C;
+            ctx.beginPath();
+            ctx.roundRect((bW - bWd)/2, hH, bWd, bHd, 4 * Scl);
+            ctx.fill();
+            ctx.fillRect(5 * Scl, hH + bHd, 5 * Scl, lH);
+            ctx.fillRect(bW - 10 * Scl, hH + bHd, 5 * Scl, lH);
+        }
+    } else if (D === 'TANK') {
+        if (isD) {
+            let mH = VDH, mW = 40 * Scl, mY = GLY - mH;
+            ctx.beginPath();
+            ctx.roundRect((bW - mW)/2, mY, mW, mH, 5 * Scl);
+            ctx.fill();
+            ctx.fillStyle = L;
+            ctx.fillRect((bW - mW)/2 - 10 * Scl, mY + 5 * Scl, 15 * Scl, 5 * Scl);
+        } else {
+            let mH = 35 * Scl, mW = 40 * Scl, mY = GLY - mH - 15 * Scl, lH = 15 * Scl;
+            ctx.fillStyle = C;
+            ctx.fillRect((bW - mW)/2, GLY - lH, mW/2, lH);
+            ctx.fillRect((bW)/2, GLY - lH, mW/2, lH);
+            ctx.beginPath();
+            ctx.roundRect((bW - mW)/2, mY, mW, mH, 5 * Scl);
+            ctx.fill();
+            ctx.fillStyle = L;
+            ctx.fillRect((bW + mW)/2, mY + 5 * Scl, 10 * Scl, 5 * Scl);
+        }
+    } else if (D === 'NINJA') {
+        if (isD) {
+            let r = VDH / 2, cY = GLY - r;
+            ctx.beginPath();
+            ctx.arc(bW/2, cY, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = L;
+            ctx.fillRect(bW/2 - 5 * Scl, cY - r, 10 * Scl, 2 * Scl); 
+        } else {
+            let bHd = 50 * Scl, bWd = 10 * Scl, bX = (bW - bWd) / 2, lY = GLY - 10 * Scl;
+            ctx.fillStyle = C;
+            ctx.fillRect(bX, lY, bWd, 10 * Scl); 
+            ctx.fillRect(bX, lY - bHd, bWd, bHd);
+            ctx.fillStyle = L;
+            ctx.fillRect(bX - 2 * Scl, lY - bHd - 5 * Scl, 14 * Scl, 5 * Scl);
+            ctx.fillStyle = C;
+            ctx.fillRect(bX - 5 * Scl, lY - bHd/2, 5 * Scl, 2 * Scl);
+            ctx.fillRect(bX + bWd, lY - bHd/2, 5 * Scl, 2 * Scl);
+        }
+    }
+
+    ctx.restore();
+    rNG();
+}
+
+function dP(){
+    var {x:px, y:py, width:pw, height:ph, originalHeight:poh, color:pcol, design:pdes, isDucking:pid} = P;
+    var c = PC[pcol] || PC.BLUE;
+    var jS = P.onGround ? 'ground' : (P.dy < 0 ? 'ascend' : 'descend');
+    dSP(x, px + pw/2, py + ph, pw, poh, c, pdes, pid, 1.0, jS);
+}
+
+function dM(){
+    x.fillStyle = '#000'; x.fillRect(0,0,c.width,c.height);
+    x.textAlign = 'center';
+    aNG(PC.BLUE); x.fillStyle = PC.BLUE; x.font = '80px Consolas'; x.fillText('NEON RUNNER', c.width/2, 110); rNG();
+    btnStart = { x: c.width/2 - 120, y: 160, w: 240, h: 45 };
+    aNG(PC.BLUE); x.strokeStyle = PC.BLUE; x.lineWidth = 3; x.beginPath(); x.roundRect(btnStart.x, btnStart.y, btnStart.w, btnStart.h, 10); x.stroke(); x.fillStyle = PC.BLUE; x.font = '30px Consolas'; x.fillText('START >', c.width/2, btnStart.y + 32); rNG();
+    var mX = c.width / 2, m = 20, bW = 150, bH = 40, bY = btnStart.y + 70;
+    btnHS = { x: mX - bW - m/2, y: bY, w: bW, h: bH };
+    aNG(PC.BLUE); x.beginPath(); x.roundRect(btnHS.x, btnHS.y, btnHS.w, bH, 10); x.stroke(); x.fillStyle = PC.BLUE; x.font = '18px Consolas'; x.fillText('HIGH SCORES', btnHS.x + bW/2, btnHS.y + 26); rNG();
+    btnShop = { x: mX + m/2, y: bY, w: bW, h: bH };
+    aNG(NR); x.beginPath(); x.roundRect(btnShop.x, btnShop.y, btnShop.w, bH, 10); x.stroke(); x.fillStyle = NR; x.font = '18px Consolas'; x.fillText('SHOP', btnShop.x + bW/2, btnShop.y + 26); rNG();
+    x.fillStyle = PC.WHITE; x.font = '18px Consolas'; x.fillText('PLAYER: ' + (lN() || 'CYBORG-UNIT-01'), c.width/2, c.height - 60);
+    x.fillText('COINS: ' + lC().toLocaleString(), c.width/2, c.height - 35);
+    x.fillStyle = GC; x.font = '12px Arial'; x.fillText('V. 4.4 | Code By Jed Harper & Google Gemini (Based on Google Chrome Dino Game)', c.width/2, c.height - 10);
+}
+
+function dSop(){
+    x.clearRect(0,0,c.width,c.height); x.fillStyle = '#000'; x.fillRect(0,0,c.width,c.height); x.textAlign = 'center';
+    aNG(NR); x.fillStyle = NR; x.font = '32px Consolas'; x.fillText('CUSTOMIZATION SHOP', c.width/2, 40); rNG();
+    x.fillStyle = PC.YELLOW; x.font = '20px Consolas'; x.textAlign = 'left'; x.fillText('COINS: ' + coins.toLocaleString(), 30, 75);
+    var sY = 100, lX = 30, iW = 95, iH = 65, sp = 10, unl = lUnl(); sBC = {}; var cY = sY;
+    
+    SHOP_VISUAL_TIERS.forEach(t=>{
+        const dK = t.design, dI = SHOP_ITEMS.find(it=>it.id===dK)||{cost:0}, dUnl = unl[dK], dC = dI.cost;
+        x.textAlign = 'left'; aNG(PC.BLUE); x.fillStyle = PC.BLUE; x.font = '16px Consolas'; x.fillText(t.title, lX, cY); rNG(); cY += 5; 
+        var cX = lX;
+        t.colors.forEach(cK=>{
+            const aD = dK, id = aD+'_'+cK, iC = PC[cK], cI = SHOP_ITEMS.find(it=>it.id===cK)||{cost:0}, cUnl = unl[cK];
+            let isSel = (P.color===cK&&P.design===aD), cost = 0, aT = 'SELECT', cCol = PC.GREEN; 
+            if (aD!=='CUBE'&&!dUnl){cost+=dC; cCol=NR;} if (cK!=='BLUE'&&!cUnl){cost+=cI.cost; cCol=NR;}
+            if (isSel){aT='ACTIVE'; cCol=PC.BLUE;} if (cost>0){aT='BUY: '+cost+'c'; cCol=NR;}
+            const X = cX, Y = cY+15, bW=iW, bH=iH;
+            x.save();
+            x.fillStyle = isSel ? iC : '#000';
+            let bC = (cUnl&&dUnl) ? iC : GC;
+            x.strokeStyle = bC; x.lineWidth = isSel ? 3 : 2; aNG(bC);
+            x.beginPath(); x.roundRect(X, Y, bW, bH, 4); x.fill(); x.stroke(); rNG();
+            const rY = Y + 45; 
+            dSP(x, X + bW/2, rY, 30, 60, iC, aD, false, 0.4, 'ground');
+            x.textAlign = 'center'; x.fillStyle = isSel ? '#000' : iC; x.font = '10px Consolas'; x.fillText(cK, X + bW/2, Y + 15);
+            x.fillStyle = isSel ? '#000' : cCol; x.font = '10px Consolas'; x.fillText(aT, X + bW/2, Y + 60);
+            sBC[id] = { x: X, y: Y, w: bW, h: bH, color: cK, actionDesign: aD };
+            cX += bW + sp; x.restore();
+        });
+        cY += iH + sp + 15; 
+    });
+    
+    var pX = c.width - 150, pY = 400; 
+    aNG(PC.BLUE); x.strokeStyle = PC.BLUE; x.lineWidth = 2; x.beginPath(); x.roundRect(c.width - 250, 60, 200, 480, 10); x.stroke(); rNG();
+    x.textAlign = 'center'; x.fillStyle = PC.BLUE; x.font = '14px Consolas'; x.fillText(`[ PREVIEW: ${pC} ${pD} ]`, c.width - 150, 75); 
+    x.strokeStyle = PC.BLUE; x.lineWidth = 2; x.beginPath(); x.moveTo(c.width - 240, pY); x.lineTo(c.width - 60, pY); x.stroke();
+    dSP(x, pX, pY - 100, P.width, P.originalHeight, PC[pC], pD, false, 1.6, 'ground');
+    x.fillStyle = PC.WHITE; x.font = '14px Consolas'; x.fillText('STANDING', pX, pY - 190);
+    dSP(x, pX, pY, P.width, P.originalHeight, PC[pC], pD, true, 1.6, 'ground');
+    x.fillStyle = PC.WHITE; x.fillText('DUCKING (Cleared)', pX, pY - 50);
+
+    btnBack = { x: c.width/2 - 90, y: c.height - 40, w: 180, h: 30 };
+    x.fillStyle = PC.BLUE; x.fillRect(btnBack.x, btnBack.y, btnBack.w, btnBack.h); x.fillStyle = '#000'; x.font = '18px Consolas'; x.fillText('BACK', c.width/2, c.height - 20);
+}
+
+function dBG(){
+    x.fillStyle = '#000'; x.fillRect(0,0,c.width,G);
+    x.fillStyle = GC; for(var i=0;i<stars.length;i++){ var s=stars[i]; x.fillRect(s.x,s.y,2,2); }
+    x.strokeStyle = GC; x.lineWidth = 1;
+    for (let i = 0; i < G; i += 30) { x.beginPath(); x.moveTo(0, i); x.lineTo(c.width, i); x.stroke(); }
+    let off = (Date.now() / 100) * S / 5;
+    for (let i = 0; i < c.width; i += 40) { x.beginPath(); x.moveTo((i + off) % c.width, 0); x.lineTo((i + off) % c.width, G); x.stroke(); }
+    x.fillStyle = '#001111'; x.fillRect(0, G, c.width, c.height - G);
+    aNG(PC.BLUE); x.strokeStyle = PC.BLUE; x.lineWidth = 3; x.beginPath(); x.moveTo(0, G); x.lineTo(c.width, G); x.stroke(); rNG();
+}
+
+function dO(){
+    for(var i=0;i<obs.length;i++){
+        var o=obs[i], {x:ox,y:oy,width:ow,height:oh,type:ot}=o;
+        
+        if(ot==='coin'){
+            aNG(PC.YELLOW); x.fillStyle = PC.YELLOW;
+            x.save(); x.translate(ox+ow/2,oy-oh/2); x.rotate((Date.now()/200)%(Math.PI*2)); 
+            x.beginPath(); for(let i=0;i<8;i++){ let a=i*Math.PI/4, r=ow/2; x.lineTo(r*Math.cos(a),r*Math.sin(a)); } x.closePath(); x.fill();
+            x.fillStyle='#000'; x.beginPath(); x.arc(0,0,ow/4,0,Math.PI*2); x.fill();
+            x.restore();
+        }else if(ot==='pylon'){
+            aNG(PC.BLUE); x.fillStyle=PC.BLUE;
+            var bW=ow/3; x.beginPath(); x.moveTo(ox+ow/2-bW/2,G); x.lineTo(ox+ow/2-bW/4,G-oh+15); x.lineTo(ox+ow/2+bW/4,G-oh+15); x.lineTo(ox+ow/2+bW/2,G); x.fill();
+            x.fillStyle=NR; aNG(NR); x.fillRect(ox+ow/4,G-oh,ow/2,10);
+            x.fillStyle=GC; x.fillRect(ox+ow/6,G-30,ow-ow/3,5); x.fillRect(ox+ow/6,G-60,ow-ow/3,5);
+        }else if(ot==='drone'){
+            var pD=400, t=Date.now()%pD, pR=t/pD, pY=oy+(G-oy)*pR, pA=1-pR, pX1=ox+ow*.15, pX2=ox+ow*.85;
+            x.save(); x.globalAlpha=pA; aNG(NR); x.strokeStyle=NR; x.lineWidth=2;
+            x.beginPath(); x.moveTo(pX1,pY); x.lineTo(pX1,pY+10); x.stroke();
+            x.beginPath(); x.moveTo(pX2,pY); x.lineTo(pX2,pY+10); x.stroke();
+            x.restore(); rNG();
+            aNG(NR); x.fillStyle=NR;
+            x.beginPath(); x.roundRect(ox,oy-oh,ow,oh,4); x.fill();
+            var pdH=4, pdW=10; x.fillRect(pX1-pdW/2,oy-pdH+2,pdW,pdH); x.fillRect(pX2-pdW/2,oy-pdH+2,pdW,pdH); 
+        }
+        rNG();
+    }
+}
+
+function sGSC(l){ if(!l)return[]; return l.sort((a,b)=>(b.score||0)-(a.score||0));}
+
+function dGHS(){
+    x.clearRect(0,0,c.width,c.height); x.fillStyle = '#000'; x.fillRect(0,0,c.width,c.height); x.textAlign = 'center';
+    if(!gSL && !gSC && !gSE){
+        gSL = true; gLS = Date.now();
+        fAS().then(l=>{ 
+            gSC = sGSC(l); gSL = false;
+        }).catch(e=>{ 
+            gSE = true; gSL = false;
+        });
+    }
+
+    if(gSL || gSE || !gSC){
+        aNG(PC.BLUE); x.fillStyle = PC.BLUE;
+        if(gSE){
+            x.font = '26px Consolas'; x.fillText('ERROR: Could not connect to score matrix.', c.width/2, c.height/2);
+            x.fillText('Retry connection or go back.', c.width/2, c.height/2 + 35);
+        } else {
+            x.font = '32px Consolas'; x.fillText('Loading Score Matrix...', c.width/2, c.height/2);
+        } rNG();
+        btnBack = { x: c.width/2 - 90, y: c.height - 40, w: 180, h: 30 };
+        x.fillStyle = PC.BLUE; x.fillRect(btnBack.x, btnBack.y, btnBack.w, btnBack.h); x.fillStyle = '#000'; x.font = '18px Consolas'; x.fillText('BACK', c.width/2, c.height - 20);
+        var now = Date.now();
+        if(now - gLS > 20000 && gSL){ gSE = true; gSL = false; }
+        return;
+    }
+
+    if(gSC && gSC.length){
+        aNG(PC.BLUE); x.fillStyle = PC.BLUE; x.font = '32px Consolas'; x.fillText('TOP 15: SYSTEM HIGH SCORE LOG', c.width/2, 40); rNG();
+        x.font = '18px Consolas'; x.fillStyle = NR; x.textAlign = 'center';
+        x.fillText('RANK', c.width/2 - 200, 75); x.fillText('SCORE (UNITS)', c.width/2 + 150, 75); x.fillText('USER ID', c.width/2 - 20, 75);
+        x.font = '16px Consolas'; var lY = 100, lP = 22, dC = Math.min(15, gSC.length); 
+        for(var j=0;j<dC;j++){
+            var e=gSC[j]||{name:'---',score:0}, n=(e.name||'---').slice(0,15).padEnd(15,' '), sStr=String(e.score||0).padStart(8,' ');
+            var rStr=(j+1).toString().padStart(2,' ');
+            x.fillStyle = j===0 ? NR : PC.BLUE;
+            x.textAlign = 'center'; x.fillText(rStr+'.',c.width/2-200,lY); x.fillText(sStr,c.width/2+150,lY); x.textAlign = 'left'; x.fillText(n,c.width/2-100,lY);
+            lY+=lP;
+        }
+        btnBack = { x: c.width/2 - 90, y: c.height - 40, w: 180, h: 30 };
+        x.fillStyle = PC.BLUE; x.fillRect(btnBack.x, btnBack.y, btnBack.w, btnBack.h); x.fillStyle = '#000'; x.font = '18px Consolas'; x.fillText('BACK', c.width/2, c.height - 20);
+    }
+}
+
+function dGO(){
+    x.fillStyle = 'rgba(0,0,0,' + gOF.toFixed(2) + ')'; x.fillRect(0,0,c.width,c.height);
+    gOF = Math.min(0.8, gOF + 0.02);
+    x.textAlign = 'center';
+    aNG(NR); x.fillStyle = NR; x.font = '50px Consolas'; x.fillText('ACCESS TERMINATED', c.width/2, c.height/2 - 60); rNG();
+    x.fillStyle = PC.WHITE; x.font = '24px Consolas';
+    x.fillText('SCORE: ' + Sc, c.width/2, c.height/2);
+    x.fillText('HIGH SCORE: ' + lH(), c.width/2, c.height/2 + 30);
+    x.fillText('COINS EARNED: ' + coins, c.width/2, c.height/2 + 60);
+    
+    var bW = 150, bH = 40, m = 20;
+    btnRetry = { x: c.width/2 - bW - m/2, y: c.height - 60, w: bW, h: bH };
+    aNG(PC.BLUE); x.beginPath(); x.roundRect(btnRetry.x, btnRetry.y, btnRetry.w, bH, 10); x.stroke(); x.fillStyle = PC.BLUE; x.font = '18px Consolas'; x.fillText('RESTART', btnRetry.x + bW/2, btnRetry.y + 26); rNG();
+    btnMenu = { x: c.width/2 + m/2, y: c.height - 60, w: bW, h: bH };
+    aNG(NR); x.beginPath(); x.roundRect(btnMenu.x, btnMenu.y, btnMenu.w, bH, 10); x.stroke(); x.fillStyle = NR; x.font = '18px Consolas'; x.fillText('MAIN MENU', btnMenu.x + bW/2, btnMenu.y + 26); rNG();
+}
+
+// Game Loop / State Management
+function startGame(){
+    E = false; M = false; obs = []; 
+    P.y = G - P.height; P.dy = 0; P.onGround = true; P.isDucking = false; P.height = P.originalHeight;
+    S = 7; Sc = 0; sT = Date.now(); gOF = 0; 
+}
+function restartGame(){ startGame(); }
+
+function u(){
+  try{
+    if(M){ 
+        if(sG){ dGHS(); requestAnimationFrame(u); return; } 
+        if(sS){ dSop(); requestAnimationFrame(u); return; } 
+        dM(); requestAnimationFrame(u); return; 
+    }
+    if(E){ dGO(); requestAnimationFrame(u); return; }
+
+    x.clearRect(0,0,c.width,c.height); dBG();
+
+    // Player Physics
+    if(!P.onGround) P.dy += P.gravity;
+    P.y += P.dy;
+    if(P.y + P.height >= G){ P.y = G - P.height; P.dy = 0; P.onGround = true; }
+
+    dP();
+
+    Sc = Math.floor((Date.now() - sT) / 170);
+    ScEl.textContent = 'Score: ' + Sc.toLocaleString() + (iI ? ' [INVINCIBLE]' : '');
+    S += ACC; if(S > MAX_SPEED) S = MAX_SPEED;
+
+    // Obstacle Logic
+    var lO = obs.length ? obs[obs.length - 1] : { x: 0 };
+    if(c.width - lO.x > 300 + Math.random() * 150){ sO(); } // spawnObstacles
+
+    // Collision Detection
+    for(var k=obs.length-1;k>=0;k--){
+        var o=obs[k];
+        o.x -= S; 
+        if(o.x + o.width < 0){ obs.splice(k, 1); continue; }
+
+        if(P.x < o.x + o.width && P.x + P.width > o.x){
+            if(o.type==='coin'){
+                if(P.y < o.y && P.y + P.height > o.y - o.height){ coins+=1; sLC(coins); obs.splice(k, 1); }
+            } else {
+                if(P.y < o.y && P.y + P.height > o.y - o.height){
+                    if(!iI){ 
+                        if(Sc > lH()) sLH(Sc);
+                        try{ uS(lN() || 'Player', Sc); }catch(e){}
+                        E = true; M = false;
+                    }
+                }
+            }
+        }
+    }
+    
+    dO();
+
+    requestAnimationFrame(u);
+  }catch(err){console.error('Update loop error:', err && err.message);}
+}
+
+function sO(){
+    var ob = []; var isC = Math.random() < 0.25; 
+    if (isC) {
+        var cY = G - 120 - Math.random() * 50; 
+        ob.push({ x: c.width, y: cY, width: 15, height: 30, type: 'coin' });
+    } else {
+        var r = Math.random();
+        if (r < 0.5) {
+            ob.push({ x: c.width, y: G, width: 30, height: 70, type: 'pylon' });
+        } else {
+            ob.push({ x: c.width, y: G - 30, width: 40, height: 15, type: 'drone' });
+        }
+    }
+    obs = obs.concat(ob);
+}
+
+// Mobile controls and Startup sequence (Minified)
+function sK(code, type) {
+    if (M || E) return; 
+    const e = new KeyboardEvent(type, { code: code, key: code === 'Space' ? ' ' : code.replace('Arrow', ''), bubbles: true });
+    document.dispatchEvent(e);
+}
+var mMo = document.getElementById('mobileModal');
+var mCo = document.getElementById('mobileControls');
+
+function sMM(isM){
+    isMob = isM;
+    localStorage.setItem('run_is_mobile', isM); 
+    mMo.classList.add('hidden');
+    mCo.style.display = isM ? 'flex' : 'none';
+    cSS(); // checkStartupSequence
+}
+
+document.getElementById('mobileYesBtn').onclick = function(){ sMM(true); };
+document.getElementById('mobileNoBtn').onclick = function(){ sMM(false); };
+document.getElementById('mobileJumpBtn').addEventListener('touchstart', function(e){ e.preventDefault(); sK('Space', 'keydown'); });
+document.getElementById('mobileJumpBtn').addEventListener('touchend', function(e){ e.preventDefault(); sK('Space', 'keyup'); });
+document.getElementById('mobileDuckBtn').addEventListener('touchstart', function(e){ e.preventDefault(); sK('ArrowDown', 'keydown'); });
+document.getElementById('mobileDuckBtn').addEventListener('touchend', function(e){ e.preventDefault(); sK('ArrowDown', 'keyup'); });
+
+document.getElementById('nameSaveBtn').onclick = function(){ 
+  var n = document.getElementById('nameInput').value.trim();
+  if(!n) n = 'CYBORG-UNIT-01';
+  
+  if (!cNS(n)) { // Cussword Check
+      alert('ACCESS DENIED: User ID contains prohibited text. Please use an acceptable ID.');
+      return; 
+  }
+  
+  sLN(n.slice(0, 24));
+  document.getElementById('nameModal').classList.add('hidden');
+  u(); // update
+};
+document.getElementById('nameSkipBtn').onclick = function(){ 
+  document.getElementById('nameModal').classList.add('hidden');
+  u(); 
+};
+
+document.getElementById('devClose').onclick = function(){
+    document.getElementById('devModal').classList.add('hidden');
+    dV = 'menu'; eSK = null; gSC = null; 
+};
+
+// DEV PANEL FUNCTIONS (Minified)
+
+function uAI(){
+    let unl = lUnl(), ch = 0;
+    for(const cK in PC){ if(!unl[cK]){ unl[cK] = true; ch++; } }
+    for(const d of PD){ if(!unl[d]){ unl[d] = true; ch++; } }
+    if(ch > 0) sLUnl(unl);
+    return ch;
+}
+
+function dDPM(p){
+    p.innerHTML = `
+        <div style="text-align:center; padding: 20px;">
+            <h4 style="color:${PC.BLUE};">DEV SYSTEM MENU</h4>
+            <div style="margin-top: 30px;">
+                <button id="devMenuScores" style="width: 250px; height: 50px; font-size: 20px; background: ${PC.BLUE}; color: #000;">VIEW/EDIT SCORES</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <button id="devMenuCheats" style="width: 250px; height: 50px; font-size: 20px; background: ${NR}; color: #000;">CHEATS & DEBUG</button>
+            </div>
+            <div style="color: ${GC}; margin-top: 50px;">
+                Current Invincibility Status: ${iI ? `<span style="color:${PC.GREEN};">ACTIVE</span>` : `<span style="color:${NR};">INACTIVE</span>`}
+            </div>
+        </div>
+    `;
+    document.getElementById('devMenuScores').onclick = function(){ dV = 'scores'; rDP(); };
+    document.getElementById('devMenuCheats').onclick = function(){ dV = 'cheats'; rDP(); };
+}
+
+function dDS(p){
+    let c = '';
+    if(gSL){
+        c = '<table><tr><td>Loading scores from Firebase...</td></tr></table>';
+    } else if (gSE || !gSC){
+        c = '<table><tr><td style="color:'+NR+';">ERROR: Could not load or connect to score database.</td></tr></table>';
+    } else {
+        const s = gSC, t = s.length;
+        let r = s.map((s, i) => {
+            const k = s.key;
+            if(eSK===k){
+                return `
+                    <tr style="background:#003333;">
+                        <td style="color:${PC.YELLOW};">${i+1}.</td>
+                        <td><input type="text" id="edit-name-${k}" value="${s.name||''}" maxlength="24" style="width:140px; padding: 3px; font-size:14px;"/></td>
+                        <td><input type="number" id="edit-score-${k}" value="${s.score||0}" style="width:80px; padding: 3px; font-size:14px;"/></td>
+                        <td>${new Date(s.ts).toLocaleString()}</td>
+                        <td>
+                            <button class="save-btn" data-key="${k}" style="background:#0F0; margin-left:5px;">SAVE</button>
+                            <button class="cancel-btn" data-key="${k}" style="background:#555;">CANCEL</button>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                return `
+                    <tr>
+                        <td>${i+1}.</td>
+                        <td>${s.name||'---'}</td>
+                        <td>${s.score||0}</td>
+                        <td>${new Date(s.ts).toLocaleString()}</td>
+                        <td>
+                            <button class="edit-btn" data-key="${k}">EDIT</button>
+                            <button class="delete-btn" data-key="${k}" style="background:${NR};">DELETE</button>
+                        </td>
+                    </tr>
+                `;
+            }
+        }).join('');
+        c = `<h4 style="color:${PC.BLUE};">DATABASE SCORE EDITING (${t} entries)</h4><table style="font-size: 14px; margin-top: 15px;"><tr><th style="width: 50px;">Rank</th><th style="width: 170px;">Name</th><th style="width: 120px;">Score</th><th style="width: 200px;">Timestamp</th><th style="width: 200px;">Actions</th></tr>${r}</table>`;
+    }
+    p.innerHTML = `${c}<div style="margin-top: 20px; text-align: center;"><button id="devScoresBack" style="background:${PC.BLUE};">BACK TO MENU</button></div>`;
+    document.getElementById('devScoresBack').onclick = function(){ dV = 'menu'; eSK = null; rDP(); };
+    p.querySelectorAll('.edit-btn').forEach(b=>{b.onclick=function(){ eSK=this.dataset.key; rDP(); };});
+    p.querySelectorAll('.cancel-btn').forEach(b=>{b.onclick=function(){ eSK=null; rDP(); };});
+    p.querySelectorAll('.delete-btn').forEach(b=>{b.onclick=async function(){ if(confirm('ACCESS DENIED: Are you certain you want to purge score data? This is irreversible.')){ await dS(this.dataset.key); gSC=null; rDP(); } };});
+    p.querySelectorAll('.save-btn').forEach(b=>{b.onclick=async function(){
+            const k=this.dataset.key, nN=document.getElementById('edit-name-'+k).value, nS=parseInt(document.getElementById('edit-score-'+k).value,10);
+            if(isNaN(nS)||!nN.trim()){ alert('ERROR: Invalid name or score.'); return; }
+            await uSFB(k,nN,nS); eSK=null; gSC=null; rDP();
+        };
+    });
+}
+
+function dDC(p){
+    const iS = iI ? `<span style="color: ${PC.GREEN};">ACTIVE</span>` : `<span style="color: ${NR};">INACTIVE</span>`;
+    p.innerHTML = `
+        <h4 style="color:${NR};">CHEAT ENGINE CONTROLS</h4>
+        <div style="display: flex; flex-direction: column; gap: 15px; max-width: 400px; margin: 20px auto; text-align: left;">
+            <div style="border: 1px solid ${NR}; padding: 15px; border-radius: 4px;">
+                <h5 style="margin-top: 0; color: ${NR};">Invincibility Mode</h5>
+                <p style="margin: 5px 0; font-size: 14px;">Bypass collision detection. Status: ${iS}</p>
+                <button id="toggleInvincibility" style="background: ${iI ? NR : PC.GREEN}; color: #000; margin-top: 10px;">
+                    ${iI ? 'DEACTIVATE' : 'ACTIVATE'} INVINCIBILITY
+                </button>
+            </div>
+            <div style="border: 1px solid ${PC.BLUE}; padding: 15px; border-radius: 4px;">
+                <h5 style="margin-top: 0; color: ${PC.BLUE};}>Unlock All Customization</h5>
+                <p style="margin: 5px 0; font-size: 14px;">Instantly unlock all colors and designs in the Shop.</p>
+                <button id="unlockAll" style="background: ${PC.BLUE}; color: #000; margin-top: 10px;">
+                    EXECUTE UNLOCK ALL
+                </button>
+            </div>
+            <div style="margin-top: 10px; text-align: center;">
+                <button id="devCheatsBack" style="background:${PC.BLUE};">BACK TO MENU</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('devCheatsBack').onclick = function(){ dV = 'menu'; rDP(); };
+    document.getElementById('toggleInvincibility').onclick = function(){ iI = !iI; rDP(); };
+    document.getElementById('unlockAll').onclick = function(){ if(uAI()>0){ alert('SUCCESS: Unlocked new items!'); } else { alert('All items already unlocked.'); } };
+}
+
+function rDP(){
+    const p = document.getElementById('devPanel');
+    if(!p) return;
+
+    if(dV === 'scores'){
+        if(!gSC){
+            gSL = true;
+            fAS().then(l=>{gSC=sGSC(l);gSL=false;dDS(p);}).catch(e=>{gSE=true;gSL=false;dDS(p);});
+            p.innerHTML = '<table><tr><td>Loading scores...</td></tr></table>'; 
+        } else { dDS(p); }
+    } else if (dV === 'cheats'){ dDC(p); } else { dDPM(p); }
+}
+
+function cSS(){
+    if (localStorage.getItem('run_is_mobile') === null) {
+        mMo.classList.remove('hidden');
+        return;
+    }
+
+    mCo.style.display = isMob ? 'flex' : 'none';
+
+    if(!lN()){
+        document.getElementById('nameModal').classList.remove('hidden');
+        document.getElementById('nameInput').focus();
+    } else {
+        u(); 
+    }
+}
+
+cSS();
+</script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
