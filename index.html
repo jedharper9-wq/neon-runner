@@ -13,7 +13,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>RUN — NEON ROBOT BUILD (V. 4.4 - Minified)</title>
+<title>RUN — NEON ROBOT BUILD (V. 4.4 - Minified + Buffering)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   /* Minified CSS */
@@ -74,7 +74,7 @@
 <div id="debugOverlay" role="status" aria-hidden="true"></div>
 
 <script type="module">
-// --- MINIFIED NEON ROBOT BUILD (V. 4.4 - Fixed and Filtered) ---
+// --- MINIFIED NEON ROBOT BUILD (V. 4.4 - Fixed and Filtered + JUMP/DUCK BUFFERING) ---
 
 // Firebase imports (Essential for Leaderboard)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
@@ -177,6 +177,7 @@ var pC = lCol(); // previewColor
 var pD = lDes(); // previewDesign
 var kBuff = ''; // keyBuffer
 var gSC = null, gSL = false, gSE = false, gLS = 0; // globalScoresCache, globalScoresLoading, globalScoresError, globalLoadStart
+var jHIA = false, dHIA = false; // Jump/Duck Hold In Air flags (NEW: Buffering)
 
 // Firebase DB Access (Minified)
 function uS(n, s){ try{ if(!db)throw 0; push(ref(db, 'scores'), { name: n || 'Player', score: s, ts: Date.now() });}catch(e){console.error('US fail', e && e.message)} }
@@ -194,7 +195,7 @@ function cNS(n) {
 }
 // --- END NAME SAFETY CHECK ---
 
-// Input Handlers
+// Input Handlers (MODIFIED for jump/duck buffering)
 document.addEventListener('keydown', function(e){
   try{
     kBuff += (e.key || '').toLowerCase(); 
@@ -205,21 +206,32 @@ document.addEventListener('keydown', function(e){
 
     if(M && !sS && !sG){ if(e.code === 'Space' || e.code === 'Enter') startGame(); return; }
     
+    // --- BUFFERED INPUT LOGIC (NEW) ---
     if(!E && !M){
-        if((e.code === 'ArrowUp' || e.code === 'Space') && P.onGround){
-            P.dy = -P.jumpPower; P.onGround = false; P.isDucking = false; P.height = P.originalHeight;
+        var isJ=e.code==='ArrowUp'||e.code==='Space', isD=e.code==='ArrowDown';
+        
+        if(isJ){ 
+            P.onGround ? (P.dy=-P.jumpPower,P.onGround=false,P.isDucking=false,P.height=P.originalHeight) : (jHIA=true);
         }
-        if(e.code === 'ArrowDown' && P.onGround && !P.isDucking){
-            P.isDucking = true; P.y += (P.originalHeight - P.duckHeight); P.height = P.duckHeight;
+        
+        if(isD){ 
+            (P.onGround&&!P.isDucking) ? (P.isDucking=true,P.y+=P.originalHeight-P.duckHeight,P.height=P.duckHeight) : (!P.onGround && (dHIA=true));
         }
     }
+    // --- END BUFFERED INPUT LOGIC ---
   }catch(err){}
 });
 
 document.addEventListener('keyup', function(e){
     try{
-        if(!E && e.code === 'ArrowDown' && P.isDucking){
-            P.isDucking = false; P.y -= (P.originalHeight - P.duckHeight); P.height = P.originalHeight;
+        if(!E){ 
+            var isJ=e.code==='ArrowUp'||e.code==='Space', isD=e.code==='ArrowDown';
+            if(isJ) jHIA=false;
+            
+            if(isD){ 
+                dHIA=false; 
+                if(P.isDucking && P.onGround){ P.isDucking=false; P.y-=P.originalHeight-P.duckHeight; P.height=P.originalHeight; }
+            }
         }
     }catch(err){}
 });
@@ -604,6 +616,7 @@ function startGame(){
     E = false; M = false; obs = []; 
     P.y = G - P.height; P.dy = 0; P.onGround = true; P.isDucking = false; P.height = P.originalHeight;
     S = 7; Sc = 0; sT = Date.now(); gOF = 0; 
+    jHIA = false; dHIA = false; // Reset buffer flags
 }
 function restartGame(){ startGame(); }
 
@@ -617,6 +630,25 @@ function u(){
     if(E){ dGO(); requestAnimationFrame(u); return; }
 
     x.clearRect(0,0,c.width,c.height); dBG();
+    
+    // --- JUMP/DUCK BUFFERING LOGIC (NEW) ---
+    if(!P.onGround){
+        // Check for buffered jump command near landing
+        if(jHIA && P.dy >= 0 && P.y + P.height + P.dy * 2 >= G){
+            P.dy = -P.jumpPower; 
+            P.onGround = false;
+            jHIA = false;
+        }
+        // Check for buffered duck command near landing
+        else if(dHIA && P.dy >= 0 && P.y + P.height + P.dy * 2 >= G){
+            P.isDucking = true;
+            P.y = G - P.duckHeight;
+            P.height = P.duckHeight;
+            P.onGround = true;
+            dHIA = false; 
+        }
+    }
+    // --- END BUFFERING LOGIC ---
 
     // Player Physics
     if(!P.onGround) P.dy += P.gravity;
